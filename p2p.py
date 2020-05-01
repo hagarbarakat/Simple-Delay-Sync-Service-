@@ -63,8 +63,8 @@ server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
 # Leave broadcaster as a global variable.
 broadcaster = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-broadcaster.setsockopt(socket.SOL_SOCKET, SO_REUSEPORT, 1)
-broadcaster.setsockopt(socket.SOL_SOCKET, SO_BROADCAST, 1)
+broadcaster.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+broadcaster.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
 # Setup the UDP socket
 
 
@@ -72,7 +72,6 @@ def send_broadcast_thread(port):
     node_uuid = get_node_uuid()
     while True:
         # TODO: write logic for sending broadcasts.
-        print_green(node_uuid, "ON", port)
         broadcaster.sendto(node_uuid.encode("UTF-8"), ('', port))
         time.sleep(1)   # Leave as is.
 
@@ -113,15 +112,15 @@ def exchange_timestamps_thread(other_uuid: str, other_ip: str, other_tcp_port: i
 
     Then update the neighbor_info map using other node's UUID.
     """
-    socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    socket.connect((other_ip, other_tcp_port))
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.connect((other_ip, other_tcp_port))
     if other_uuid in neighbor_information and neighbor_information[other_uuid].broadcast_count < 10:
         neighbor_information[other_uuid].broadcast_count += 1
     else:
         t = time.time()
-        data, (ip, port) = socket.recvfrom(4096)
+        data, (ip, port) = sock.recvfrom(4096)
         t2 = data
-        delay = t2 - t1 
+        delay = t2 - t
         neighbor_information[other_uuid] = NeighborInfo(delay, 1, other_ip, other_tcp_port)
     print_yellow(f"ATTEMPTING TO CONNECT TO {other_uuid}")
     pass
@@ -138,7 +137,7 @@ def daemon_thread_builder(target, args=()) -> threading.Thread:
 
 def entrypoint():
     server.bind(('', 0)) 
-    port = sock.getsockname()[1]
+    port = server.getsockname()[1]
     daemon_thread_builder(tcp_server_thread, (server))
     daemon_thread_builder(send_broadcast_thread, (port)) 
     daemon_thread_builder(receive_broadcast_thread)
