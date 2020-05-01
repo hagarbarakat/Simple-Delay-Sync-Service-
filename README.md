@@ -2,7 +2,7 @@
 
 ## Requirements:  
   **Operating System:** Linux  
-## Check list:  
+## Checklist:  
 - Part 1: 
   - [ ] Run every function in the skeleton that ends with _thread in its own thread
   - [ ] Setup the TCP socket and start accepting clients (tcp_server_thread)
