@@ -72,7 +72,9 @@ def send_broadcast_thread(port):
     node_uuid = get_node_uuid()
     while True:
         # TODO: write logic for sending broadcasts.
-        broadcaster.sendto(node_uuid.encode("UTF-8"), ('', port))
+        print("Send broadcast")
+        print(node_uuid, "ON ", port)
+        broadcaster.sendto(node_uuid.encode("UTF-8"), ('localhost', get_broadcast_port()))
         time.sleep(1)   # Leave as is.
 
 
@@ -87,7 +89,7 @@ def receive_broadcast_thread():
         data, (ip, port) = broadcaster.recvfrom(4096)
         data =  data.decode('UTF-8')
         print_blue(f"RECV: {data} FROM: {ip}:{port}")
-        daemon_thread_builder(exchange_timestamps_thread,(data,ip,port))
+        daemon_thread_builder(exchange_timestamps_thread, (data, ip, port))
 
 
 def tcp_server_thread(server):
@@ -95,6 +97,16 @@ def tcp_server_thread(server):
     Accept connections from other nodes and send them
     this node's timestamp once they connect.
     """
+    server.bind(('localhost', 0)) 
+    port = server.getsockname()[1]
+    thread_2 = daemon_thread_builder(send_broadcast_thread, (port, )) 
+    thread_3 = daemon_thread_builder(receive_broadcast_thread)
+    thread_2.start()
+    thread_3.start()
+    thread_2.join()
+    thread_3.join()
+
+    print("TCP-server thread")
     server.listen(20)
     while True:
         clientSocket, addr = server.accept()
@@ -102,7 +114,6 @@ def tcp_server_thread(server):
         t = time.time() 
         packed = struct.pack("!f", t)       
         clientSocket.sendto(packed, addr)
-    pass
 
 
 def exchange_timestamps_thread(other_uuid: str, other_ip: str, other_tcp_port: int):
@@ -123,7 +134,6 @@ def exchange_timestamps_thread(other_uuid: str, other_ip: str, other_tcp_port: i
         delay = t2 - t
         neighbor_information[other_uuid] = NeighborInfo(delay, 1, other_ip, other_tcp_port)
     print_yellow(f"ATTEMPTING TO CONNECT TO {other_uuid}")
-    pass
 
 
 def daemon_thread_builder(target, args=()) -> threading.Thread:
@@ -136,12 +146,16 @@ def daemon_thread_builder(target, args=()) -> threading.Thread:
 
 
 def entrypoint():
-    server.bind(('', 0)) 
-    port = server.getsockname()[1]
-    daemon_thread_builder(tcp_server_thread, (server))
-    daemon_thread_builder(send_broadcast_thread, (port)) 
-    daemon_thread_builder(receive_broadcast_thread)
-    pass
+    
+    broadcaster.bind(('localhost', get_broadcast_port()))
+    thread_1 = daemon_thread_builder(tcp_server_thread, (server, ))
+    
+    thread_1.start()
+    
+
+    thread_1.join()
+    
+
 
 ############################################
 ############################################
