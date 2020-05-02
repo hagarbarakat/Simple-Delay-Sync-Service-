@@ -73,8 +73,9 @@ def send_broadcast_thread(port):
     while True:
         # TODO: write logic for sending broadcasts.
         print("Send broadcast")
+        packed = struct.pack("!8s4si",node_uuid.encode("UTF-8"), " ON ".encode("UTF-8"), port) 
         print(node_uuid, "ON ", port)
-        broadcaster.sendto(node_uuid.encode("UTF-8"), ('localhost', get_broadcast_port()))
+        broadcaster.sendto(packed, ('localhost', get_broadcast_port()))
         time.sleep(1)   # Leave as is.
 
 
@@ -87,7 +88,8 @@ def receive_broadcast_thread():
     while True:
         # TODO: write logic for receiving broadcasts.
         data, (ip, port) = broadcaster.recvfrom(4096)
-        data =  data.decode('UTF-8')
+        data =  struct.unpack('!8s4si', data)
+        print(data[0].decode('UTF-8'), data[1].decode('UTF-8'), data[2])
         print_blue(f"RECV: {data} FROM: {ip}:{port}")
         daemon_thread_builder(exchange_timestamps_thread, (data, ip, port))
 
@@ -130,6 +132,7 @@ def exchange_timestamps_thread(other_uuid: str, other_ip: str, other_tcp_port: i
     else:
         t = time.time()
         data, (ip, port) = sock.recvfrom(4096)
+        print(data)
         t2 = data
         delay = t2 - t
         neighbor_information[other_uuid] = NeighborInfo(delay, 1, other_ip, other_tcp_port)
@@ -149,10 +152,7 @@ def entrypoint():
     
     broadcaster.bind(('localhost', get_broadcast_port()))
     thread_1 = daemon_thread_builder(tcp_server_thread, (server, ))
-    
     thread_1.start()
-    
-
     thread_1.join()
     
 
