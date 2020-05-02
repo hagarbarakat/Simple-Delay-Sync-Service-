@@ -63,6 +63,7 @@ server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
 # Leave broadcaster as a global variable.
 broadcaster = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+broadcaster.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 broadcaster.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
 broadcaster.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
 # Setup the UDP socket
@@ -70,12 +71,13 @@ broadcaster.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
 
 def send_broadcast_thread(port):
     node_uuid = get_node_uuid()
+
     while True:
         # TODO: write logic for sending broadcasts.
-        print("Send broadcast")
+        print_red("Send broadcast")
         packed = struct.pack("!8s4si",node_uuid.encode("UTF-8"), " ON ".encode("UTF-8"), port) 
-        print(node_uuid, "ON ", port)
-        broadcaster.sendto(packed, ('', get_broadcast_port()))
+        #print(node_uuid, " ON ", port)
+        broadcaster.sendto(packed, ('255.255.255.255', get_broadcast_port()))
         time.sleep(1)   # Leave as is.
 
 
@@ -87,12 +89,14 @@ def receive_broadcast_thread():
     """
     while True:
         # TODO: write logic for receiving broadcasts.
+       
         data, (ip, port) = broadcaster.recvfrom(4096)
         data =  struct.unpack('!8s4si', data)
+        print("receive")
         print(data[0].decode('UTF-8'), data[1].decode('UTF-8'), data[2])
         print_blue(f"RECV: {data} FROM: {ip}:{port}")
-        thread_4 = daemon_thread_builder(exchange_timestamps_thread, (data, ip, port))
-        thread_4.start()
+        #thread_4 = daemon_thread_builder(exchange_timestamps_thread, (data, ip, port))
+        #thread_4.start()
 
 
 def tcp_server_thread(server):
@@ -100,7 +104,7 @@ def tcp_server_thread(server):
     Accept connections from other nodes and send them
     this node's timestamp once they connect.
     """
-    server.bind(('', 0)) 
+    server.bind(('localhost', 0)) 
     port = server.getsockname()[1]
     thread_2 = daemon_thread_builder(send_broadcast_thread, (port, )) 
     thread_3 = daemon_thread_builder(receive_broadcast_thread)
@@ -148,8 +152,8 @@ def daemon_thread_builder(target, args=()) -> threading.Thread:
 
 
 def entrypoint():
-    
-    broadcaster.bind(('', get_broadcast_port()))
+    broadcaster.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    broadcaster.bind(('255.255.255.255', get_broadcast_port()))
     thread_1 = daemon_thread_builder(tcp_server_thread, (server, ))
     thread_1.start()
     thread_1.join()
