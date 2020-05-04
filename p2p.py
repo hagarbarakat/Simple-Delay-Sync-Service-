@@ -5,6 +5,7 @@ import socket
 import time
 import uuid
 import struct
+import datetime
 
 # https://bluesock.org/~willkg/dev/ansi.html
 ANSI_RESET = "\u001B[0m"
@@ -69,12 +70,12 @@ broadcaster.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
 # Setup the UDP socket
 
 
-def send_broadcast_thread(port):
+def send_broadcast_thread():
     node_uuid = get_node_uuid()
-
     while True:
         # TODO: write logic for sending broadcasts.
-        print_red("{node_uuid} is sending broadcast with port {port}...")
+        port = server.getsockname()[1]
+        print_red(f"{node_uuid} is sending broadcast with port {port}...")
         packed = struct.pack("!8s4si",node_uuid.encode("UTF-8"), " ON ".encode("UTF-8"), port) 
         broadcaster.sendto(packed, ('255.255.255.255', get_broadcast_port()))
         time.sleep(1)   # Leave as is.
@@ -97,7 +98,7 @@ def receive_broadcast_thread():
         thread_4.start()
 
 
-def tcp_server_thread(server):
+def tcp_server_thread():
     """
     Accept connections from other nodes and send them
     this node's timestamp once they connect.
@@ -106,8 +107,9 @@ def tcp_server_thread(server):
     while True:
         clientSocket, addr = server.accept()
         print("[TCP Server] got connection from: ", str(addr))
-        t = time.time() 
-        packed = struct.pack("!f", t)    
+        t = datetime.datetime.utcnow().timestamp()
+        #print_yellow(f"current node {get_node_uuid()} timestamp = {t}")
+        packed = struct.pack("!d", t) 
         clientSocket.send(packed)
         clientSocket.close()
 
@@ -126,15 +128,20 @@ def exchange_timestamps_thread(other_uuid: str, other_ip: str, other_tcp_port: i
         print_red(f"counter = {neighbor_information[other_uuid].broadcast_count}")
         neighbor_information[other_uuid].broadcast_count += 1
     else:
-        print_yellow(f"ATTEMPTING TO CONNECT TO {other_uuid}")
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.connect((other_ip, other_tcp_port))
+        print_yellow(f"ATTEMPTING TO CONNECT TO {other_uuid}")
+        time.sleep(1)
         data = sock.recv(4096)
-        unpacked = struct.unpack("!f", data)
+        unpacked = struct.unpack("!d", data)
         t2 = unpacked[0]
-        t = time.time()
-        delay = t2 - t
+        print_green(f"current node {get_node_uuid()} timestamp: {t2}")
+        t = datetime.datetime.utcnow().timestamp()
+        print(f"other node {other_uuid} timestamp: {t}") 
+        delay = t - t2
+        print("Delay = ",delay)
         neighbor_information[other_uuid] = NeighborInfo(delay, 1, other_ip, other_tcp_port)
+        sock.close()
 
 
 def daemon_thread_builder(target, args=()) -> threading.Thread:
@@ -150,9 +157,8 @@ def entrypoint():
     broadcaster.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     broadcaster.bind(('255.255.255.255', get_broadcast_port()))
     server.bind(("0.0.0.0", 0)) 
-    port = server.getsockname()[1]
-    thread_1 = daemon_thread_builder(tcp_server_thread, (server, ))
-    thread_2 = daemon_thread_builder(send_broadcast_thread, (port, )) 
+    thread_1 = daemon_thread_builder(tcp_server_thread)
+    thread_2 = daemon_thread_builder(send_broadcast_thread) 
     thread_3 = daemon_thread_builder(receive_broadcast_thread)
     thread_1.start()
     thread_2.start()
