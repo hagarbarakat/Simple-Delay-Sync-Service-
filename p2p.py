@@ -76,8 +76,8 @@ def send_broadcast_thread():
         # TODO: write logic for sending broadcasts.
         port = server.getsockname()[1]
         print_red(f"{node_uuid} is sending broadcast with port {port}...")
-        packed = struct.pack("!8s4si",node_uuid.encode("UTF-8"), " ON ".encode("UTF-8"), port) 
-        broadcaster.sendto(packed, ('255.255.255.255', get_broadcast_port()))
+        message = node_uuid + " ON " + str(port)
+        broadcaster.sendto(message.encode("UTF-8"), ('255.255.255.255', get_broadcast_port()))
         time.sleep(1)   # Leave as is.
 
 
@@ -91,10 +91,9 @@ def receive_broadcast_thread():
         # TODO: write logic for receiving broadcasts.
        
         data, (ip, port) = broadcaster.recvfrom(4096)
-        data =  struct.unpack('!8s4si', data)
-        print(data[0].decode('UTF-8'), data[1].decode('UTF-8'), data[2])
-        print_blue(f"RECV: {data} FROM: {ip}:{port}")
-        thread_4 = daemon_thread_builder(exchange_timestamps_thread, (data[0].decode('UTF-8'), ip, data[2]))
+        data = data.decode('UTF-8').split(" ")
+        print_blue(f"RECV: {data[0]} FROM: {ip}:{port}")
+        thread_4 = daemon_thread_builder(exchange_timestamps_thread, (data[0], ip, int(data[2])))
         thread_4.start()
 
 
@@ -125,13 +124,13 @@ def exchange_timestamps_thread(other_uuid: str, other_ip: str, other_tcp_port: i
     if node.strip() == other_uuid.strip():
         return
     if other_uuid in neighbor_information and neighbor_information[other_uuid].broadcast_count < 10:
-        print_red(f"counter = {neighbor_information[other_uuid].broadcast_count}")
         neighbor_information[other_uuid].broadcast_count += 1
+        print_red(f"neighbor_information[other_uuid].broadcast_count = {neighbor_information[other_uuid].broadcast_count}")
+        #print(neighbor_information)
     else:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.connect((other_ip, other_tcp_port))
         print_yellow(f"ATTEMPTING TO CONNECT TO {other_uuid}")
-        time.sleep(1)
         data = sock.recv(4096)
         unpacked = struct.unpack("!d", data)
         t2 = unpacked[0]
@@ -139,7 +138,9 @@ def exchange_timestamps_thread(other_uuid: str, other_ip: str, other_tcp_port: i
         t = datetime.datetime.utcnow().timestamp()
         print(f"other node {other_uuid} timestamp: {t}") 
         delay = t - t2
-        print("Delay = ",delay)
+        print("Delay -timestamp- = ",delay)
+        date = datetime.datetime.utcfromtimestamp(delay)
+        #print_green(f"Delay = {date}")
         neighbor_information[other_uuid] = NeighborInfo(delay, 1, other_ip, other_tcp_port)
         sock.close()
 
@@ -188,3 +189,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
